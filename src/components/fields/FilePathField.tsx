@@ -20,20 +20,16 @@ export function FilePathField({ name, label, value, required, description, onCha
 
   return (
     <FieldWrapper label={label} required={required} description={description}>
-      <div className="flex gap-2">
+      <div className="field-file-row">
         <input
           id={name}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          className="field-input"
         />
-        <button
-          type="button"
-          onClick={handleBrowse}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-        >
-          浏览
+        <button type="button" onClick={handleBrowse} className="field-btn">
+          BROWSE
         </button>
       </div>
     </FieldWrapper>

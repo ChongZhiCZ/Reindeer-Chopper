@@ -19,7 +19,7 @@ export function getOrCreateTerminal(taskId: string): TerminalEntry {
       cursorBlink: true,
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: { background: '#1e1e1e', foreground: '#d4d4d4' },
+      theme: { background: '#000000', foreground: '#d4d4d4' },
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)

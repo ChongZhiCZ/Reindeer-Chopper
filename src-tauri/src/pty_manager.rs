@@ -9,6 +9,7 @@ pub struct PtySession {
     writer: Box<dyn Write + Send>,
     _master: Box<dyn portable_pty::MasterPty + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    plugin_id: Option<String>,
 }
 
 pub type PtyStore = Arc<Mutex<HashMap<String, PtySession>>>;
@@ -22,6 +23,7 @@ pub fn spawn(
     app: AppHandle,
     cwd: String,
     argv: Vec<String>,
+    plugin_id: Option<String>,
     task_id: Option<String>,
 ) -> Result<String, String> {
     if argv.is_empty() {
@@ -93,10 +95,17 @@ pub fn spawn(
             writer,
             _master: pair.master,
             child,
+            plugin_id,
         },
     );
 
     Ok(task_id)
+}
+
+pub fn has_running_tasks_for_plugin(store: &PtyStore, plugin_id: &str) -> bool {
+    let map = store.lock().unwrap();
+    map.values()
+        .any(|session| session.plugin_id.as_deref() == Some(plugin_id))
 }
 
 pub fn write_input(store: &PtyStore, task_id: &str, data: &str) -> Result<(), String> {

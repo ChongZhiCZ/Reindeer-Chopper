@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { useEffect, useReducer, useRef } from 'react'
+import { open } from '@tauri-apps/plugin-dialog'
+import { type MouseEvent as ReactMouseEvent, useEffect, useReducer, useRef, useState } from 'react'
 import { ConfigBar } from './components/ConfigBar'
 import { PluginForm, initFormValues } from './components/PluginForm'
 import { PluginSidebar } from './components/PluginSidebar'
@@ -21,6 +22,7 @@ interface AppState {
 
 type Action =
   | { type: 'SELECT_PLUGIN'; plugin: PluginDescriptor }
+  | { type: 'CLEAR_PLUGIN' }
   | {
       type: 'SELECT_CONFIG'
       configId: string | null
@@ -40,6 +42,13 @@ function reducer(state: AppState, action: Action): AppState {
         selectedPlugin: action.plugin,
         selectedConfigId: null,
         formValues: initFormValues(action.plugin),
+      }
+    case 'CLEAR_PLUGIN':
+      return {
+        ...state,
+        selectedPlugin: null,
+        selectedConfigId: null,
+        formValues: {},
       }
     case 'SELECT_CONFIG':
       return { ...state, selectedConfigId: action.configId, formValues: action.values }
@@ -78,9 +87,30 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
+function errorMessage(error: unknown): string {
+  if (typeof error === 'string') {
+    return error
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string') {
+      return message
+    }
+  }
+  return String(error)
+}
+
 export default function App() {
   const { plugins, refresh } = usePlugins()
   usePtyEvents()
+  const clampTerminalHeight = (height: number) => {
+    const min = 180
+    const max = Math.max(min, window.innerHeight - 220)
+    return Math.min(max, Math.max(min, height))
+  }
+
+  const [terminalHeight, setTerminalHeight] = useState(() => clampTerminalHeight(320))
+  const resizeStateRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const pendingInstallRuns = useRef(
     new Map<
       string,
@@ -169,6 +199,43 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const state = resizeStateRef.current
+      if (!state) {
+        return
+      }
+
+      const delta = state.startY - event.clientY
+      setTerminalHeight(clampTerminalHeight(state.startHeight + delta))
+    }
+
+    const handleMouseUp = () => {
+      if (!resizeStateRef.current) {
+        return
+      }
+      resizeStateRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    const handleWindowResize = () => {
+      setTerminalHeight((height) => clampTerminalHeight(height))
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('resize', handleWindowResize)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('resize', handleWindowResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
+
   const handleSelectConfig = (config: (typeof configs)[number] | null) => {
     if (!state.selectedPlugin) {
       return
@@ -189,6 +256,42 @@ export default function App() {
     const saved = await saveConfig(name, state.formValues, state.selectedConfigId ?? undefined)
     if (saved) {
       dispatch({ type: 'SELECT_CONFIG', configId: saved.id, values: state.formValues })
+    }
+  }
+
+  const handleImportPlugin = async () => {
+    try {
+      const selected = await open({ directory: true, multiple: false })
+      if (!selected || Array.isArray(selected)) {
+        return
+      }
+
+      const imported = await invoke<PluginDescriptor>('import_plugin', { sourcePath: selected })
+      dispatch({ type: 'SELECT_PLUGIN', plugin: imported })
+      await refresh()
+    } catch (error) {
+      window.alert(`导入失败：${errorMessage(error)}`)
+    }
+  }
+
+  const handleUninstallPlugin = async () => {
+    if (!state.selectedPlugin) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `确认卸载插件“${state.selectedPlugin.name}”？将同时删除该插件的所有已保存配置。`,
+    )
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await invoke('uninstall_plugin', { pluginId: state.selectedPlugin.id })
+      dispatch({ type: 'CLEAR_PLUGIN' })
+      await refresh()
+    } catch (error) {
+      window.alert(`卸载失败：${errorMessage(error)}`)
     }
   }
 
@@ -225,6 +328,16 @@ export default function App() {
     }
   }
 
+  const handleTerminalResizeStart = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    resizeStateRef.current = {
+      startY: event.clientY,
+      startHeight: terminalHeight,
+    }
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }
+
   const handleCloseTask = async (id: string) => {
     await invoke('kill_task', { taskId: id }).catch(console.error)
     destroyTerminal(id)
@@ -241,50 +354,66 @@ export default function App() {
       })
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white text-gray-900">
-      <PluginSidebar
-        plugins={plugins}
-        selectedId={state.selectedPlugin?.id ?? null}
-        onSelect={(p) => dispatch({ type: 'SELECT_PLUGIN', plugin: p })}
-        onRefresh={refresh}
-      />
+    <div className="app-shell">
+      <header className="topbar">reindeer-chopper</header>
+      <div className="app-layout">
+        <PluginSidebar
+          plugins={plugins}
+          selectedId={state.selectedPlugin?.id ?? null}
+          onSelect={(p) => dispatch({ type: 'SELECT_PLUGIN', plugin: p })}
+          onImport={handleImportPlugin}
+          onUninstall={handleUninstallPlugin}
+          uninstallDisabled={!state.selectedPlugin}
+        />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="max-h-96 overflow-y-auto border-b border-gray-200 p-4">
-          {state.selectedPlugin ? (
-            <>
-              <h2 className="mb-3 text-base font-semibold">{state.selectedPlugin.name}</h2>
-              <ConfigBar
-                configs={configs}
-                selectedId={state.selectedConfigId}
-                onSelect={handleSelectConfig}
-                onSave={handleSaveConfig}
-                onDelete={deleteConfig}
-              />
-              <div className="mt-3">
+        <main className="main-area">
+          <div className="content-panel">
+            {state.selectedPlugin ? (
+              <>
+                <h1 className="page-title">{state.selectedPlugin.name}</h1>
+                <p className="page-desc">{state.selectedPlugin.description ?? 'No description provided.'}</p>
+                <ConfigBar
+                  configs={configs}
+                  selectedId={state.selectedConfigId}
+                  onSelect={handleSelectConfig}
+                  onSave={handleSaveConfig}
+                  onDelete={deleteConfig}
+                  onRun={handleRun}
+                  canRun={canRun}
+                />
                 <PluginForm
                   plugin={state.selectedPlugin}
                   values={state.formValues}
                   onChange={(name, value) => dispatch({ type: 'SET_FORM_VALUE', name, value })}
-                  onRun={handleRun}
-                  canRun={canRun}
                 />
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-gray-400">从左侧选择一个插件</p>
-          )}
-        </div>
+              </>
+            ) : (
+              <p className="empty-state">SELECT A PLUGIN FROM THE LEFT PANEL.</p>
+            )}
+          </div>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <TaskTabBar
-            tasks={state.tasks}
-            activeTaskId={state.activeTaskId}
-            onSelect={(id) => dispatch({ type: 'SET_ACTIVE_TASK', id })}
-            onClose={handleCloseTask}
-          />
-          <TerminalPanel tasks={state.tasks} activeTaskId={state.activeTaskId} />
-        </div>
+          <div className="terminal-shell" style={{ height: `${terminalHeight}px` }}>
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              onMouseDown={handleTerminalResizeStart}
+              className="terminal-resize-handle"
+              title="拖动调整终端高度"
+            >
+              <div className="terminal-resize-line" />
+            </div>
+
+            <div className="terminal-frame">
+              <TaskTabBar
+                tasks={state.tasks}
+                activeTaskId={state.activeTaskId}
+                onSelect={(id) => dispatch({ type: 'SET_ACTIVE_TASK', id })}
+                onClose={handleCloseTask}
+              />
+              <TerminalPanel tasks={state.tasks} activeTaskId={state.activeTaskId} />
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   )

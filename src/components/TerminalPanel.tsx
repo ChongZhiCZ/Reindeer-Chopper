@@ -31,14 +31,15 @@ export function TerminalPanel({ tasks, activeTaskId }: Props) {
   }, [activeTaskId])
 
   return (
-    <div className="flex-1 overflow-hidden bg-[#1e1e1e]">
-      <div className="relative h-full w-full">
+    <div className="terminal-panel">
+      <div className="terminal-stack">
         {tasks.map((task) => (
           <div
             key={task.id}
-            ref={setContainerRef(task.id)}
-            className={`absolute inset-0 ${task.id === activeTaskId ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-          />
+            className={`terminal-layer ${task.id === activeTaskId ? 'terminal-layer-visible' : 'terminal-layer-hidden'}`}
+          >
+            <div ref={setContainerRef(task.id)} className="terminal-inner" />
+          </div>
         ))}
       </div>
     </div>

@@ -9,13 +9,13 @@ interface Props {
 
 export function FieldWrapper({ label, description, required, children }: Props) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm font-medium text-gray-700">
+    <div className="field-group">
+      <label className="field-label">
         {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
+        {required && <span className="field-required">*</span>}
       </label>
       {children}
-      {description && <p className="text-xs text-gray-500">{description}</p>}
+      {description && <p className="field-hint">{description}</p>}
     </div>
   )
 }

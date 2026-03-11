@@ -7,22 +7,24 @@ interface Props {
   onSelect: (config: PluginConfig | null) => void
   onSave: (name: string) => void
   onDelete: (id: string) => void
+  onRun: () => void
+  canRun: boolean
 }
 
-export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete }: Props) {
+export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete, onRun, canRun }: Props) {
   const [newName, setNewName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const selected = configs.find((c) => c.id === selectedId) ?? null
 
   return (
-    <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
-      <span className="shrink-0 text-sm text-gray-600">配置：</span>
+    <div className="control-bar">
+      <div className="control-label">CONFIG</div>
       <select
         value={selectedId ?? ''}
         onChange={(e) => onSelect(configs.find((c) => c.id === e.target.value) ?? null)}
-        className="min-w-0 max-w-48 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+        className="control-select"
       >
-        <option value="">-- 未选择 --</option>
+        <option value="">-- NONE --</option>
         {configs.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -46,8 +48,8 @@ export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete }: P
                 setIsCreating(false)
               }
             }}
-            placeholder="配置名称"
-            className="w-32 rounded border border-gray-300 px-2 py-1 text-sm"
+            placeholder="CONFIG NAME"
+            className="control-input"
           />
           <button
             type="button"
@@ -58,16 +60,16 @@ export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete }: P
                 setIsCreating(false)
               }
             }}
-            className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+            className="control-btn"
           >
-            确认
+            CREATE
           </button>
           <button
             type="button"
             onClick={() => setIsCreating(false)}
-            className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+            className="control-btn"
           >
-            取消
+            CANCEL
           </button>
         </>
       ) : (
@@ -75,28 +77,37 @@ export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete }: P
           <button
             type="button"
             onClick={() => setIsCreating(true)}
-            className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+            className="control-btn"
           >
-            新建
+            NEW
           </button>
           <button
             type="button"
             onClick={() => selected && onSave(selected.name)}
             disabled={!selected}
-            className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+            className="control-btn"
           >
-            保存
+            SAVE
           </button>
           <button
             type="button"
             onClick={() => selected && onDelete(selected.id)}
             disabled={!selected}
-            className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="control-btn"
           >
-            删除
+            DELETE
           </button>
         </>
       )}
+
+      <button
+        type="button"
+        onClick={onRun}
+        disabled={!canRun}
+        className="control-btn run"
+      >
+        RUN CONFIG
+      </button>
     </div>
   )
 }

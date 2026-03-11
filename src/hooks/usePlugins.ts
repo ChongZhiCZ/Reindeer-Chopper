@@ -5,8 +5,13 @@ import { PluginDescriptor } from '../types'
 export function usePlugins() {
   const [plugins, setPlugins] = useState<PluginDescriptor[]>([])
 
-  const refresh = () => {
-    invoke<PluginDescriptor[]>('list_plugins').then(setPlugins).catch(console.error)
+  const refresh = async () => {
+    try {
+      const list = await invoke<PluginDescriptor[]>('list_plugins')
+      setPlugins(list)
+    } catch (error) {
+      console.error(error)
+    }
   }
 
   useEffect(() => {

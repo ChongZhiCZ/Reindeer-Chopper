@@ -9,12 +9,12 @@ interface Props {
 
 function statusColor(status: Task['status']) {
   if (status === 'running') {
-    return 'bg-green-400'
+    return 'task-dot-running'
   }
   if (status === 'error') {
-    return 'bg-red-400'
+    return 'task-dot-error'
   }
-  return 'bg-gray-400'
+  return 'task-dot-done'
 }
 
 export function TaskTabBar({ tasks, activeTaskId, onSelect, onClose }: Props) {
@@ -23,27 +23,20 @@ export function TaskTabBar({ tasks, activeTaskId, onSelect, onClose }: Props) {
   }
 
   return (
-    <div className="flex items-end gap-0.5 overflow-x-auto border-b border-gray-200">
+    <div className="task-tab-bar">
       {tasks.map((task) => {
         const isActive = task.id === activeTaskId
-        const title = `${task.pluginName}-${task.configName}`
+        const title = `${task.pluginName} - ${task.configName}`
 
         return (
           <div
             key={task.id}
             onClick={() => onSelect(task.id)}
-            className={`
-              flex cursor-pointer select-none items-center gap-1.5 rounded-t border-x border-t px-3 py-1.5 text-sm
-              ${
-                isActive
-                  ? 'shrink-0 border-gray-200 bg-white text-gray-900'
-                  : 'min-w-0 border-gray-100 bg-gray-50 text-gray-500 hover:bg-gray-100'
-              }
-            `}
-            style={isActive ? {} : { minWidth: '80px', maxWidth: '160px' }}
+            className={`task-tab ${isActive ? 'task-tab-active' : ''}`}
+            style={{ minWidth: '120px', maxWidth: '240px' }}
           >
-            <span className={`h-2 w-2 shrink-0 rounded-full ${statusColor(task.status)}`} />
-            <span className={isActive ? '' : 'flex-1 truncate'} title={title}>
+            <span className={`task-dot ${statusColor(task.status)}`} />
+            <span className="task-label" title={title}>
               {title}
             </span>
             <button
@@ -52,7 +45,7 @@ export function TaskTabBar({ tasks, activeTaskId, onSelect, onClose }: Props) {
                 e.stopPropagation()
                 onClose(task.id)
               }}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+              className="task-close"
             >
               ×
             </button>

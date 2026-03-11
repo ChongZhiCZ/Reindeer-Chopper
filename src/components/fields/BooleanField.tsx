@@ -11,15 +11,15 @@ interface Props {
 export function BooleanField({ name, label, value, description, onChange }: Props) {
   return (
     <FieldWrapper label={label} description={description}>
-      <label className="flex cursor-pointer items-center gap-2">
+      <label className="field-checkbox-row">
         <input
           id={name}
           type="checkbox"
           checked={value}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded"
+          className="field-checkbox"
         />
-        <span className="text-sm text-gray-600">启用</span>
+        <span>ENABLE</span>
       </label>
     </FieldWrapper>
   )

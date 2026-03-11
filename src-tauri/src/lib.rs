@@ -1,4 +1,5 @@
 mod config_manager;
+mod plugin_manager;
 mod plugin_scanner;
 mod pty_manager;
 
@@ -17,6 +18,30 @@ fn app_data_dir(app: &AppHandle) -> PathBuf {
 fn list_plugins(app: AppHandle) -> Vec<plugin_scanner::PluginDescriptor> {
     let dir = app_data_dir(&app).join("plugins");
     plugin_scanner::scan_plugins(&dir)
+}
+
+#[tauri::command]
+fn import_plugin(
+    app: AppHandle,
+    source_path: String,
+) -> Result<plugin_scanner::PluginDescriptor, String> {
+    let plugins_dir = app_data_dir(&app).join("plugins");
+    plugin_manager::import_plugin(&plugins_dir, &PathBuf::from(source_path))
+}
+
+#[tauri::command]
+fn uninstall_plugin(
+    app: AppHandle,
+    store: State<'_, PtyStore>,
+    plugin_id: String,
+) -> Result<(), String> {
+    if pty_manager::has_running_tasks_for_plugin(store.inner(), &plugin_id) {
+        return Err("Cannot uninstall plugin while it has running tasks".to_string());
+    }
+
+    let plugins_dir = app_data_dir(&app).join("plugins");
+    let configs_dir = app_data_dir(&app).join("configs");
+    plugin_manager::uninstall_plugin(&plugins_dir, &configs_dir, &plugin_id)
 }
 
 #[tauri::command]
@@ -65,6 +90,7 @@ async fn run_plugin(
             app.clone(),
             plugin_dir.to_string_lossy().to_string(),
             vec!["npm".to_string(), "install".to_string()],
+            Some(plugin_id.clone()),
             Some(format!("install-{}", Uuid::new_v4())),
         )?;
         config_manager::mark_deps_installed(&configs_dir, &plugin_id, true)?;
@@ -108,6 +134,7 @@ async fn run_plugin(
         app,
         plugin_dir.to_string_lossy().to_string(),
         argv,
+        Some(plugin_id),
         None,
     )?;
 
@@ -146,6 +173,8 @@ pub fn run() {
         .manage(pty_manager::new_store())
         .invoke_handler(tauri::generate_handler![
             list_plugins,
+            import_plugin,
+            uninstall_plugin,
             list_configs,
             save_config,
             delete_config,

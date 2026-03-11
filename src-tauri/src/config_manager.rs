@@ -28,7 +28,11 @@ fn load_config_file(configs_dir: &PathBuf, plugin_id: &str) -> PluginConfigFile 
     serde_json::from_str(&content).unwrap_or_default()
 }
 
-fn save_config_file(configs_dir: &PathBuf, plugin_id: &str, file: &PluginConfigFile) -> Result<(), String> {
+fn save_config_file(
+    configs_dir: &PathBuf,
+    plugin_id: &str,
+    file: &PluginConfigFile,
+) -> Result<(), String> {
     std::fs::create_dir_all(configs_dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
     std::fs::write(config_file(configs_dir, plugin_id), json).map_err(|e| e.to_string())

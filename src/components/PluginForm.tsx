@@ -9,8 +9,6 @@ interface Props {
   plugin: PluginDescriptor
   values: Record<string, string | number | boolean>
   onChange: (name: string, value: string | number | boolean) => void
-  onRun: () => void
-  canRun: boolean
 }
 
 function defaultValue(p: ParameterDescriptor): string | number | boolean {
@@ -33,11 +31,9 @@ export function initFormValues(plugin: PluginDescriptor): Record<string, string 
   return Object.fromEntries(plugin.parameters.map((p) => [p.name, defaultValue(p)]))
 }
 
-export function PluginForm({ plugin, values, onChange, onRun, canRun }: Props) {
+export function PluginForm({ plugin, values, onChange }: Props) {
   return (
-    <div className="flex flex-col gap-4">
-      {plugin.description && <p className="text-sm text-gray-500">{plugin.description}</p>}
-
+    <div className="plugin-form">
       {plugin.parameters.map((p) => {
         const val = values[p.name] ?? defaultValue(p)
         const common = {
@@ -72,17 +68,6 @@ export function PluginForm({ plugin, values, onChange, onRun, canRun }: Props) {
         }
         return null
       })}
-
-      <div className="flex justify-end pt-2">
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={!canRun}
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          运行此配置
-        </button>
-      </div>
     </div>
   )
 }
