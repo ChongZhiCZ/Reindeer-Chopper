@@ -1,0 +1,29 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "A sample plugin that greets the user",
+  "entry": "index.js",
+  "parameters": [
+    {
+      "name": "name",
+      "label": "Your Name",
+      "type": "text",
+      "required": true,
+      "default": "World",
+      "description": "Who to greet"
+    },
+    {
+      "name": "count",
+      "label": "Repeat Count",
+      "type": "number",
+      "default": 3
+    },
+    {
+      "name": "loud",
+      "label": "LOUD MODE",
+      "type": "boolean",
+      "default": false
+    }
+  ]
+}
