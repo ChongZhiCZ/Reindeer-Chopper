@@ -5,14 +5,23 @@ interface Props {
   name: string
   label: string
   value: string
+  mode: 'file' | 'directory'
   required?: boolean
   description?: string
   onChange: (v: string) => void
 }
 
-export function FilePathField({ name, label, value, required, description, onChange }: Props) {
+export function FilePathField({
+  name,
+  label,
+  value,
+  mode,
+  required,
+  description,
+  onChange,
+}: Props) {
   const handleBrowse = async () => {
-    const selected = await open({ directory: false, multiple: false })
+    const selected = await open({ directory: mode === 'directory', multiple: false })
     if (typeof selected === 'string') {
       onChange(selected)
     }

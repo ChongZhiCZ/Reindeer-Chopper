@@ -1,4 +1,5 @@
 import { FieldWrapper } from './FieldWrapper'
+import { WireSelect } from '../WireSelect'
 
 interface Props {
   name: string
@@ -11,20 +12,18 @@ interface Props {
 }
 
 export function SelectField({ name, label, value, options, required, description, onChange }: Props) {
+  const selectOptions = options.map((option) => ({ value: option, label: option }))
+
   return (
     <FieldWrapper label={label} required={required} description={description}>
-      <select
+      <WireSelect
         id={name}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="field-input field-select"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
+        options={selectOptions}
+        onChange={onChange}
+        containerClassName="field-select-wrap"
+        triggerClassName="field-input field-select"
+      />
     </FieldWrapper>
   )
 }

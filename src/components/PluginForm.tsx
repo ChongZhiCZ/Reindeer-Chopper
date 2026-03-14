@@ -64,7 +64,14 @@ export function PluginForm({ plugin, values, onChange }: Props) {
           )
         }
         if (p.type === 'filepath') {
-          return <FilePathField {...common} value={val as string} onChange={(v) => onChange(p.name, v)} />
+          return (
+            <FilePathField
+              {...common}
+              value={val as string}
+              mode={p.pathMode}
+              onChange={(v) => onChange(p.name, v)}
+            />
+          )
         }
         return null
       })}

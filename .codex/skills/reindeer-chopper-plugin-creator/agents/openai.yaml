@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reindeer Chopper Plugin Creator"
+  short_description: "Create and validate Reindeer Chopper Node plugins"
+  default_prompt: "Use $reindeer-chopper-plugin-creator to scaffold a new plugin for this repository."

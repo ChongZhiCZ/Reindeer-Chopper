@@ -1,0 +1,40 @@
+{
+  "id": "playwright-screenshot",
+  "name": "Playwright Screenshot",
+  "version": "1.0.0",
+  "description": "Open a website and save a screenshot to the selected folder",
+  "runtime": {
+    "windows": {
+      "run": "node index.js",
+      "install": "cmd /C \"npm install && npx playwright install chromium\""
+    },
+    "mac": {
+      "run": "node index.js",
+      "install": "sh -lc 'npm install && npx playwright install chromium'"
+    }
+  },
+  "parameters": [
+    {
+      "name": "url",
+      "label": "Website URL",
+      "type": "text",
+      "required": true,
+      "default": "https://example.com",
+      "description": "Target website to open before taking a screenshot"
+    },
+    {
+      "name": "outputDir",
+      "label": "Output Folder",
+      "type": "filepath",
+      "required": true,
+      "pathMode": "directory",
+      "description": "Directory where screenshot.png will be written"
+    },
+    {
+      "name": "headless",
+      "label": "Headless Mode",
+      "type": "boolean",
+      "default": false
+    }
+  ]
+}

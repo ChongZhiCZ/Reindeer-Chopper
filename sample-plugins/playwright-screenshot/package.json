@@ -1,0 +1,9 @@
+{
+  "name": "playwright-screenshot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sample Playwright screenshot plugin for Reindeer Chopper",
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}

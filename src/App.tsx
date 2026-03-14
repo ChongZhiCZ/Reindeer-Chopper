@@ -110,6 +110,9 @@ export default function App() {
   }
 
   const [terminalHeight, setTerminalHeight] = useState(() => clampTerminalHeight(320))
+  const [uninstallTarget, setUninstallTarget] = useState<{ id: string; name: string } | null>(null)
+  const [removeConfigsOnUninstall, setRemoveConfigsOnUninstall] = useState(false)
+  const [isUninstalling, setIsUninstalling] = useState(false)
   const resizeStateRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const pendingInstallRuns = useRef(
     new Map<
@@ -167,7 +170,7 @@ export default function App() {
           })
         })
         .catch((err) => {
-          console.error('run_plugin after npm install failed', err)
+          console.error('run_plugin after install failed', err)
         })
     })
 
@@ -177,7 +180,7 @@ export default function App() {
       pluginName: string
       configName: string
       params: Record<string, unknown>
-    }>('npm_install_started', (e) => {
+    }>('install_started', (e) => {
       const { taskId, pluginId, pluginName, configName, params } = e.payload
       pendingInstallRuns.current.set(taskId, { pluginId, pluginName, configName, params })
       dispatch({
@@ -185,7 +188,7 @@ export default function App() {
         task: {
           id: taskId,
           pluginId,
-          pluginName: `${pluginName} [npm install]`,
+          pluginName: `${pluginName} [install]`,
           configName,
           status: 'running',
         },
@@ -274,24 +277,41 @@ export default function App() {
     }
   }
 
-  const handleUninstallPlugin = async () => {
+  const handleUninstallPlugin = () => {
     if (!state.selectedPlugin) {
       return
     }
+    setUninstallTarget({ id: state.selectedPlugin.id, name: state.selectedPlugin.name })
+    setRemoveConfigsOnUninstall(false)
+  }
 
-    const confirmed = window.confirm(
-      `确认卸载插件“${state.selectedPlugin.name}”？将同时删除该插件的所有已保存配置。`,
-    )
-    if (!confirmed) {
+  const closeUninstallModal = () => {
+    if (isUninstalling) {
+      return
+    }
+    setUninstallTarget(null)
+    setRemoveConfigsOnUninstall(false)
+  }
+
+  const handleConfirmUninstall = async () => {
+    if (!uninstallTarget) {
       return
     }
 
+    setIsUninstalling(true)
     try {
-      await invoke('uninstall_plugin', { pluginId: state.selectedPlugin.id })
+      await invoke('uninstall_plugin', {
+        pluginId: uninstallTarget.id,
+        removeConfigs: removeConfigsOnUninstall,
+      })
       dispatch({ type: 'CLEAR_PLUGIN' })
+      setUninstallTarget(null)
+      setRemoveConfigsOnUninstall(false)
       await refresh()
     } catch (error) {
       window.alert(`卸载失败：${errorMessage(error)}`)
+    } finally {
+      setIsUninstalling(false)
     }
   }
 
@@ -415,6 +435,51 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {uninstallTarget ? (
+        <div className="modal-overlay" onClick={closeUninstallModal}>
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="uninstall-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div id="uninstall-modal-title" className="modal-head">
+              CONFIRM UNINSTALL
+            </div>
+            <div className="modal-body">
+              <p className="modal-text">Uninstall plugin "{uninstallTarget.name}"?</p>
+              <p className="modal-text modal-text-muted">
+                This removes plugin files. Config deletion is optional.
+              </p>
+              <label className="modal-checkbox-row">
+                <input
+                  type="checkbox"
+                  className="field-checkbox"
+                  checked={removeConfigsOnUninstall}
+                  onChange={(event) => setRemoveConfigsOnUninstall(event.target.checked)}
+                  disabled={isUninstalling}
+                />
+                <span>Also delete this plugin&apos;s config file</span>
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="control-btn modal-btn" onClick={closeUninstallModal} disabled={isUninstalling}>
+                CANCEL
+              </button>
+              <button
+                type="button"
+                className="control-btn modal-btn modal-btn-danger"
+                onClick={handleConfirmUninstall}
+                disabled={isUninstalling}
+              >
+                {isUninstalling ? 'UNINSTALLING...' : 'UNINSTALL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

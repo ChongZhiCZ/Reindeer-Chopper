@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PluginConfig } from '../types'
+import { WireSelect } from './WireSelect'
 
 interface Props {
   configs: PluginConfig[]
@@ -15,22 +16,18 @@ export function ConfigBar({ configs, selectedId, onSelect, onSave, onDelete, onR
   const [newName, setNewName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const selected = configs.find((c) => c.id === selectedId) ?? null
+  const selectOptions = [{ value: '', label: '-- NONE --' }, ...configs.map((c) => ({ value: c.id, label: c.name }))]
 
   return (
     <div className="control-bar">
       <div className="control-label">CONFIG</div>
-      <select
+      <WireSelect
         value={selectedId ?? ''}
-        onChange={(e) => onSelect(configs.find((c) => c.id === e.target.value) ?? null)}
-        className="control-select"
-      >
-        <option value="">-- NONE --</option>
-        {configs.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
+        options={selectOptions}
+        onChange={(nextValue) => onSelect(configs.find((c) => c.id === nextValue) ?? null)}
+        containerClassName="control-select-wrap"
+        triggerClassName="control-select"
+      />
 
       {isCreating ? (
         <>

@@ -14,6 +14,90 @@ fn app_data_dir(app: &AppHandle) -> PathBuf {
     app.path().app_data_dir().expect("app data dir")
 }
 
+fn current_platform_runtime(
+    descriptor: &plugin_scanner::PluginDescriptor,
+) -> &plugin_scanner::PlatformRuntimeDescriptor {
+    if cfg!(target_os = "windows") {
+        &descriptor.runtime.windows
+    } else {
+        &descriptor.runtime.mac
+    }
+}
+
+fn split_command_line(command: &str) -> Result<Vec<String>, String> {
+    let mut argv = Vec::new();
+    let mut current = String::new();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for ch in command.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if !in_single_quote => {
+                escaped = true;
+            }
+            '\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+            }
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+            }
+            _ if ch.is_whitespace() && !in_single_quote && !in_double_quote => {
+                if !current.is_empty() {
+                    argv.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if escaped {
+        return Err("Invalid command: trailing escape character".to_string());
+    }
+    if in_single_quote || in_double_quote {
+        return Err("Invalid command: unmatched quote".to_string());
+    }
+    if !current.is_empty() {
+        argv.push(current);
+    }
+    if argv.is_empty() {
+        return Err("Invalid command: command is empty".to_string());
+    }
+
+    Ok(argv)
+}
+
+fn append_param_args(
+    argv: &mut Vec<String>,
+    descriptor: &plugin_scanner::PluginDescriptor,
+    params: &HashMap<String, serde_json::Value>,
+) {
+    for param in &descriptor.parameters {
+        if let Some(val) = params.get(&param.name) {
+            match val {
+                serde_json::Value::Bool(true) => argv.push(format!("--{}", param.name)),
+                serde_json::Value::Bool(false) => {}
+                serde_json::Value::Null => {}
+                other => {
+                    argv.push(format!("--{}", param.name));
+                    argv.push(
+                        other
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| other.to_string()),
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[tauri::command]
 fn list_plugins(app: AppHandle) -> Vec<plugin_scanner::PluginDescriptor> {
     let dir = app_data_dir(&app).join("plugins");
@@ -34,6 +118,7 @@ fn uninstall_plugin(
     app: AppHandle,
     store: State<'_, PtyStore>,
     plugin_id: String,
+    remove_configs: bool,
 ) -> Result<(), String> {
     if pty_manager::has_running_tasks_for_plugin(store.inner(), &plugin_id) {
         return Err("Cannot uninstall plugin while it has running tasks".to_string());
@@ -41,7 +126,7 @@ fn uninstall_plugin(
 
     let plugins_dir = app_data_dir(&app).join("plugins");
     let configs_dir = app_data_dir(&app).join("configs");
-    plugin_manager::uninstall_plugin(&plugins_dir, &configs_dir, &plugin_id)
+    plugin_manager::uninstall_plugin(&plugins_dir, &configs_dir, &plugin_id, remove_configs)
 }
 
 #[tauri::command]
@@ -79,24 +164,51 @@ async fn run_plugin(
         .map_err(|e| format!("Cannot read plugin.json: {}", e))?;
     let descriptor: plugin_scanner::PluginDescriptor =
         serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    plugin_scanner::validate_plugin_descriptor(&descriptor)
+        .map_err(|e| format!("Invalid plugin descriptor: {e}"))?;
 
-    let pkg_json = plugin_dir.join("package.json");
+    let runtime = current_platform_runtime(&descriptor);
+    let install_command = runtime
+        .install
+        .as_deref()
+        .map(str::trim)
+        .filter(|cmd| !cmd.is_empty());
+
     let configs_dir = app_data_dir(&app).join("configs");
     let deps_installed = config_manager::is_deps_installed(&configs_dir, &plugin_id);
 
-    if !skip_install.unwrap_or(false) && pkg_json.exists() && !deps_installed {
+    if !skip_install.unwrap_or(false) && !deps_installed {
+        let Some(install_command) = install_command else {
+            // No install command configured for this platform.
+            // Treat this plugin as installation-free.
+            let mut argv = split_command_line(runtime.run.trim())?;
+            append_param_args(&mut argv, &descriptor, &params);
+
+            let task_id = pty_manager::spawn(
+                store.inner().clone(),
+                app,
+                plugin_dir.to_string_lossy().to_string(),
+                argv,
+                Some(plugin_id),
+                None,
+            )?;
+
+            return Ok(task_id);
+        };
+
+        let install_argv = split_command_line(install_command)?;
         let task_id = pty_manager::spawn(
             store.inner().clone(),
             app.clone(),
             plugin_dir.to_string_lossy().to_string(),
-            vec!["npm".to_string(), "install".to_string()],
+            install_argv,
             Some(plugin_id.clone()),
             Some(format!("install-{}", Uuid::new_v4())),
         )?;
         config_manager::mark_deps_installed(&configs_dir, &plugin_id, true)?;
 
         let _ = app.emit(
-            "npm_install_started",
+            "install_started",
             serde_json::json!({
                 "taskId": task_id,
                 "pluginId": plugin_id,
@@ -109,25 +221,8 @@ async fn run_plugin(
         return Ok(task_id);
     }
 
-    let mut argv = vec!["node".to_string(), descriptor.entry.clone()];
-    for param in &descriptor.parameters {
-        if let Some(val) = params.get(&param.name) {
-            match val {
-                serde_json::Value::Bool(true) => argv.push(format!("--{}", param.name)),
-                serde_json::Value::Bool(false) => {}
-                serde_json::Value::Null => {}
-                other => {
-                    argv.push(format!("--{}", param.name));
-                    argv.push(
-                        other
-                            .as_str()
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| other.to_string()),
-                    );
-                }
-            }
-        }
-    }
+    let mut argv = split_command_line(runtime.run.trim())?;
+    append_param_args(&mut argv, &descriptor, &params);
 
     let task_id = pty_manager::spawn(
         store.inner().clone(),

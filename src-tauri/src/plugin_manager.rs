@@ -1,4 +1,4 @@
-use crate::plugin_scanner::PluginDescriptor;
+use crate::plugin_scanner::{validate_plugin_descriptor, PluginDescriptor};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -27,6 +27,7 @@ fn load_descriptor(plugin_dir: &Path) -> Result<PluginDescriptor, String> {
         .map_err(|e| format!("Failed to read plugin.json: {e}"))?;
     let mut descriptor: PluginDescriptor =
         serde_json::from_str(&content).map_err(|e| format!("Invalid plugin.json: {e}"))?;
+    validate_plugin_descriptor(&descriptor).map_err(|e| format!("Invalid plugin.json: {e}"))?;
 
     ensure_safe_plugin_id(&descriptor.id)?;
     descriptor.path = plugin_dir.to_string_lossy().to_string();
@@ -96,6 +97,7 @@ pub fn uninstall_plugin(
     plugins_dir: &PathBuf,
     configs_dir: &PathBuf,
     plugin_id: &str,
+    remove_configs: bool,
 ) -> Result<(), String> {
     ensure_safe_plugin_id(plugin_id)?;
 
@@ -111,14 +113,16 @@ pub fn uninstall_plugin(
         )
     })?;
 
-    let config_file = configs_dir.join(format!("{}.json", plugin_id));
-    if config_file.exists() {
-        fs::remove_file(&config_file).map_err(|e| {
-            format!(
-                "Failed to remove config file {}: {e}",
-                config_file.display()
-            )
-        })?;
+    if remove_configs {
+        let config_file = configs_dir.join(format!("{}.json", plugin_id));
+        if config_file.exists() {
+            fs::remove_file(&config_file).map_err(|e| {
+                format!(
+                    "Failed to remove config file {}: {e}",
+                    config_file.display()
+                )
+            })?;
+        }
     }
 
     Ok(())
@@ -139,12 +143,21 @@ mod tests {
   "id": "{id}",
   "name": "{name}",
   "version": "1.0.0",
-  "entry": "index.js",
+  "runtime": {{
+    "windows": {{"run": "node index.js"}},
+    "mac": {{"run": "node index.js"}}
+  }},
   "parameters": []
 }}"#
             ),
         )
         .unwrap();
+        fs::write(dir.join("index.js"), "console.log('ok')").unwrap();
+    }
+
+    fn write_plugin_json(dir: &Path, json: &str) {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join("plugin.json"), json).unwrap();
         fs::write(dir.join("index.js"), "console.log('ok')").unwrap();
     }
 
@@ -181,7 +194,35 @@ mod tests {
     }
 
     #[test]
-    fn uninstall_plugin_removes_plugin_and_config() {
+    fn import_plugin_rejects_filepath_without_path_mode() {
+        let temp = TempDir::new().unwrap();
+        let plugins_dir = temp.path().join("plugins");
+        let source_dir = temp.path().join("bad-filepath-plugin");
+        write_plugin_json(
+            &source_dir,
+            r#"{
+  "id": "bad-filepath-plugin",
+  "name": "Bad Filepath Plugin",
+  "version": "1.0.0",
+  "runtime": {
+    "windows": {"run": "node index.js"},
+    "mac": {"run": "node index.js"}
+  },
+  "parameters": [
+    {"name": "input", "label": "Input", "type": "filepath"}
+  ]
+}"#,
+        );
+
+        let result = import_plugin(&plugins_dir, &source_dir);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("missing/invalid pathMode"));
+    }
+
+    #[test]
+    fn uninstall_plugin_keeps_config_when_remove_configs_false() {
         let temp = TempDir::new().unwrap();
         let plugins_dir = temp.path().join("plugins");
         let configs_dir = temp.path().join("configs");
@@ -192,7 +233,25 @@ mod tests {
         fs::create_dir_all(&configs_dir).unwrap();
         fs::write(configs_dir.join("remove-me.json"), "{}").unwrap();
 
-        uninstall_plugin(&plugins_dir, &configs_dir, "remove-me").unwrap();
+        uninstall_plugin(&plugins_dir, &configs_dir, "remove-me", false).unwrap();
+
+        assert!(!plugins_dir.join("remove-me").exists());
+        assert!(configs_dir.join("remove-me.json").exists());
+    }
+
+    #[test]
+    fn uninstall_plugin_removes_config_when_remove_configs_true() {
+        let temp = TempDir::new().unwrap();
+        let plugins_dir = temp.path().join("plugins");
+        let configs_dir = temp.path().join("configs");
+        let source_dir = temp.path().join("source-plugin");
+        write_plugin(&source_dir, "remove-me", "Remove Me");
+
+        import_plugin(&plugins_dir, &source_dir).unwrap();
+        fs::create_dir_all(&configs_dir).unwrap();
+        fs::write(configs_dir.join("remove-me.json"), "{}").unwrap();
+
+        uninstall_plugin(&plugins_dir, &configs_dir, "remove-me", true).unwrap();
 
         assert!(!plugins_dir.join("remove-me").exists());
         assert!(!configs_dir.join("remove-me.json").exists());
@@ -205,7 +264,7 @@ mod tests {
         let configs_dir = temp.path().join("configs");
         fs::create_dir_all(&plugins_dir).unwrap();
 
-        let result = uninstall_plugin(&plugins_dir, &configs_dir, "../bad");
+        let result = uninstall_plugin(&plugins_dir, &configs_dir, "../bad", false);
         assert!(result.is_err());
     }
 }

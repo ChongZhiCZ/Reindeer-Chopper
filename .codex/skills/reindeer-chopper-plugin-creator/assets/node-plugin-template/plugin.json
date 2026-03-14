@@ -1,8 +1,8 @@
 {
-  "id": "hello-world",
-  "name": "Hello World",
+  "id": "__PLUGIN_ID__",
+  "name": "__PLUGIN_NAME__",
   "version": "1.0.0",
-  "description": "The built-in sample plugin for Reindeer Chopper. It greets the user and demonstrates filepath params.",
+  "description": "__PLUGIN_DESCRIPTION__",
   "runtime": {
     "windows": {
       "run": "node index.js",
@@ -15,46 +15,45 @@
   },
   "parameters": [
     {
-      "name": "name",
-      "label": "Your Name",
+      "name": "message",
+      "label": "Message",
       "type": "text",
       "required": true,
-      "default": "World",
-      "description": "Who to greet"
+      "default": "Hello from __PLUGIN_NAME__"
     },
     {
       "name": "count",
       "label": "Repeat Count",
       "type": "number",
-      "default": 3
+      "default": 1
     },
     {
       "name": "mode",
       "label": "Output Mode",
       "type": "select",
-      "default": "问候",
-      "options": ["问候", "自述"],
-      "description": "Choose between repeated greeting and self-introduction output."
+      "default": "greet",
+      "options": ["greet", "intro"],
+      "description": "Choose greeting mode or intro mode."
     },
     {
       "name": "loud",
-      "label": "LOUD MODE",
+      "label": "Loud Mode",
       "type": "boolean",
       "default": false
     },
     {
       "name": "inputFile",
-      "label": "Sample Input File",
+      "label": "Input File",
       "type": "filepath",
       "pathMode": "file",
-      "description": "Pick a file to demo filepath(file)."
+      "description": "Optional input file path."
     },
     {
       "name": "outputDir",
-      "label": "Sample Output Directory",
+      "label": "Output Directory",
       "type": "filepath",
       "pathMode": "directory",
-      "description": "Pick a directory to demo filepath(directory)."
+      "description": "Optional output directory path."
     }
   ]
 }
