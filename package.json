@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dist:mac": "npm run tauri build -- --bundles dmg",
+    "dist:win": "npm run tauri build -- --bundles nsis,msi"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
