@@ -48,6 +48,20 @@ export interface PluginConfig {
 
 export type TaskStatus = 'running' | 'done' | 'error'
 
+export const SYSTEM_TASK_ID = '__system__'
+
+export type TaskLogLevel = 'info' | 'warn' | 'error'
+export type TaskLogSource = 'frontend' | 'backend'
+
+export interface TaskLogEvent {
+  taskId?: string
+  level: TaskLogLevel
+  source: TaskLogSource
+  phase: string
+  message: string
+  ts: string
+}
+
 export interface Task {
   id: string
   pluginId: string

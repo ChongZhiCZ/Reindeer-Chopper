@@ -24,6 +24,22 @@ fn current_platform_runtime(
     }
 }
 
+fn log_backend_error(app: &AppHandle, phase: &str, message: &str, task_id: Option<&str>) {
+    pty_manager::emit_task_log(app, task_id, "error", "backend", phase, message.to_string());
+}
+
+fn map_and_log_err<T>(
+    app: &AppHandle,
+    phase: &str,
+    result: Result<T, String>,
+    task_id: Option<&str>,
+) -> Result<T, String> {
+    result.map_err(|err| {
+        log_backend_error(app, phase, &err, task_id);
+        err
+    })
+}
+
 fn split_command_line(command: &str) -> Result<Vec<String>, String> {
     let mut argv = Vec::new();
     let mut current = String::new();
@@ -161,11 +177,23 @@ async fn run_plugin(
 
     let json_path = plugin_dir.join("plugin.json");
     let content = std::fs::read_to_string(&json_path)
-        .map_err(|e| format!("Cannot read plugin.json: {}", e))?;
-    let descriptor: plugin_scanner::PluginDescriptor =
-        serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Cannot read plugin.json: {}", e))
+        .map_err(|err| {
+            log_backend_error(&app, "run_plugin.read_descriptor", &err, None);
+            err
+        })?;
+    let descriptor: plugin_scanner::PluginDescriptor = serde_json::from_str(&content)
+        .map_err(|e| e.to_string())
+        .map_err(|err| {
+            log_backend_error(&app, "run_plugin.parse_descriptor", &err, None);
+            err
+        })?;
     plugin_scanner::validate_plugin_descriptor(&descriptor)
-        .map_err(|e| format!("Invalid plugin descriptor: {e}"))?;
+        .map_err(|e| format!("Invalid plugin descriptor: {e}"))
+        .map_err(|err| {
+            log_backend_error(&app, "run_plugin.validate_descriptor", &err, None);
+            err
+        })?;
 
     let runtime = current_platform_runtime(&descriptor);
     let install_command = runtime
@@ -181,29 +209,45 @@ async fn run_plugin(
         let Some(install_command) = install_command else {
             // No install command configured for this platform.
             // Treat this plugin as installation-free.
-            let mut argv = split_command_line(runtime.run.trim())?;
+            let mut argv =
+                map_and_log_err(&app, "run_plugin.split_run_command", split_command_line(runtime.run.trim()), None)?;
             append_param_args(&mut argv, &descriptor, &params);
 
-            let task_id = pty_manager::spawn(
-                store.inner().clone(),
-                app,
-                plugin_dir.to_string_lossy().to_string(),
-                argv,
-                Some(plugin_id),
+            let task_id = map_and_log_err(
+                &app,
+                "run_plugin.spawn_run_task",
+                pty_manager::spawn(
+                    store.inner().clone(),
+                    app.clone(),
+                    plugin_dir.to_string_lossy().to_string(),
+                    argv,
+                    Some(plugin_id),
+                    None,
+                ),
                 None,
             )?;
 
             return Ok(task_id);
         };
 
-        let install_argv = split_command_line(install_command)?;
-        let task_id = pty_manager::spawn(
-            store.inner().clone(),
-            app.clone(),
-            plugin_dir.to_string_lossy().to_string(),
-            install_argv,
-            Some(plugin_id.clone()),
-            Some(format!("install-{}", Uuid::new_v4())),
+        let install_argv = map_and_log_err(
+            &app,
+            "run_plugin.split_install_command",
+            split_command_line(install_command),
+            None,
+        )?;
+        let task_id = map_and_log_err(
+            &app,
+            "run_plugin.spawn_install_task",
+            pty_manager::spawn(
+                store.inner().clone(),
+                app.clone(),
+                plugin_dir.to_string_lossy().to_string(),
+                install_argv,
+                Some(plugin_id.clone()),
+                Some(format!("install-{}", Uuid::new_v4())),
+            ),
+            None,
         )?;
         config_manager::mark_deps_installed(&configs_dir, &plugin_id, true)?;
 
@@ -221,15 +265,25 @@ async fn run_plugin(
         return Ok(task_id);
     }
 
-    let mut argv = split_command_line(runtime.run.trim())?;
+    let mut argv = map_and_log_err(
+        &app,
+        "run_plugin.split_run_command",
+        split_command_line(runtime.run.trim()),
+        None,
+    )?;
     append_param_args(&mut argv, &descriptor, &params);
 
-    let task_id = pty_manager::spawn(
-        store.inner().clone(),
-        app,
-        plugin_dir.to_string_lossy().to_string(),
-        argv,
-        Some(plugin_id),
+    let task_id = map_and_log_err(
+        &app,
+        "run_plugin.spawn_run_task",
+        pty_manager::spawn(
+            store.inner().clone(),
+            app.clone(),
+            plugin_dir.to_string_lossy().to_string(),
+            argv,
+            Some(plugin_id),
+            None,
+        ),
         None,
     )?;
 
@@ -237,13 +291,24 @@ async fn run_plugin(
 }
 
 #[tauri::command]
-fn pty_input(store: State<'_, PtyStore>, task_id: String, data: String) -> Result<(), String> {
-    pty_manager::write_input(store.inner(), &task_id, &data)
+fn pty_input(
+    app: AppHandle,
+    store: State<'_, PtyStore>,
+    task_id: String,
+    data: String,
+) -> Result<(), String> {
+    pty_manager::write_input(store.inner(), &task_id, &data).map_err(|err| {
+        log_backend_error(&app, "pty_input", &err, Some(task_id.as_str()));
+        err
+    })
 }
 
 #[tauri::command]
-fn kill_task(store: State<'_, PtyStore>, task_id: String) -> Result<(), String> {
-    pty_manager::kill_task(store.inner(), &task_id)
+fn kill_task(app: AppHandle, store: State<'_, PtyStore>, task_id: String) -> Result<(), String> {
+    pty_manager::kill_task(store.inner(), &task_id).map_err(|err| {
+        log_backend_error(&app, "kill_task", &err, Some(task_id.as_str()));
+        err
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

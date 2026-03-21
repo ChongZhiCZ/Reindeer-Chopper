@@ -9,8 +9,8 @@ import { TaskTabBar } from './components/TaskTabBar'
 import { TerminalPanel } from './components/TerminalPanel'
 import { useConfigs } from './hooks/useConfigs'
 import { usePlugins } from './hooks/usePlugins'
-import { destroyTerminal, usePtyEvents } from './hooks/useTerminal'
-import { PluginDescriptor, Task } from './types'
+import { destroyTerminal, usePtyEvents, useTaskLogEvents, writeToTerminal } from './hooks/useTerminal'
+import { PluginDescriptor, SYSTEM_TASK_ID, Task } from './types'
 
 interface AppState {
   selectedPlugin: PluginDescriptor | null
@@ -66,7 +66,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'CLOSE_TASK': {
       const tasks = state.tasks.filter((t) => t.id !== action.id)
       const activeTaskId =
-        state.activeTaskId === action.id ? (tasks[tasks.length - 1]?.id ?? null) : state.activeTaskId
+        state.activeTaskId === action.id ? (tasks[tasks.length - 1]?.id ?? SYSTEM_TASK_ID) : state.activeTaskId
       return { ...state, tasks, activeTaskId }
     }
     case 'TASK_DONE':
@@ -103,6 +103,7 @@ function errorMessage(error: unknown): string {
 export default function App() {
   const { plugins, refresh } = usePlugins()
   usePtyEvents()
+  useTaskLogEvents()
   const clampTerminalHeight = (height: number) => {
     const min = 180
     const max = Math.max(min, window.innerHeight - 220)
@@ -131,10 +132,17 @@ export default function App() {
     selectedConfigId: null,
     formValues: {},
     tasks: [],
-    activeTaskId: null,
+    activeTaskId: SYSTEM_TASK_ID,
   })
 
   const { configs, saveConfig, deleteConfig } = useConfigs(state.selectedPlugin?.id ?? null)
+
+  const appendSystemError = (phase: string, error: unknown) => {
+    writeToTerminal(
+      SYSTEM_TASK_ID,
+      `[${new Date().toISOString()}] [frontend] [error] [${phase}] ${errorMessage(error)}\r\n`,
+    )
+  }
 
   useEffect(() => {
     const unsubTaskDone = listen<{ taskId: string; exitCode?: number }>('task_done', (e) => {
@@ -171,6 +179,7 @@ export default function App() {
         })
         .catch((err) => {
           console.error('run_plugin after install failed', err)
+          appendSystemError('run_plugin.skipInstall', err)
         })
     })
 
@@ -345,6 +354,7 @@ export default function App() {
       })
     } catch (e) {
       console.error('run_plugin failed', e)
+      appendSystemError('run_plugin', e)
     }
   }
 
@@ -359,7 +369,13 @@ export default function App() {
   }
 
   const handleCloseTask = async (id: string) => {
-    await invoke('kill_task', { taskId: id }).catch(console.error)
+    if (id === SYSTEM_TASK_ID) {
+      return
+    }
+    await invoke('kill_task', { taskId: id }).catch((err) => {
+      console.error(err)
+      appendSystemError('kill_task', err)
+    })
     destroyTerminal(id)
     dispatch({ type: 'CLOSE_TASK', id })
   }

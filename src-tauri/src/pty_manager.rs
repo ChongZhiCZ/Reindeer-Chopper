@@ -1,3 +1,4 @@
+use chrono::{SecondsFormat, Utc};
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -13,6 +14,31 @@ pub struct PtySession {
 }
 
 pub type PtyStore = Arc<Mutex<HashMap<String, PtySession>>>;
+
+fn now_ts() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+pub fn emit_task_log(
+    app: &AppHandle,
+    task_id: Option<&str>,
+    level: &str,
+    source: &str,
+    phase: &str,
+    message: impl Into<String>,
+) {
+    let _ = app.emit(
+        "task_log",
+        serde_json::json!({
+            "taskId": task_id,
+            "level": level,
+            "source": source,
+            "phase": phase,
+            "message": message.into(),
+            "ts": now_ts(),
+        }),
+    );
+}
 
 pub fn new_store() -> PtyStore {
     Arc::new(Mutex::new(HashMap::new()))
@@ -59,7 +85,18 @@ pub fn spawn(
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
+                Err(err) => {
+                    emit_task_log(
+                        &app_clone,
+                        Some(&tid),
+                        "error",
+                        "backend",
+                        "pty.read",
+                        err.to_string(),
+                    );
+                    break;
+                }
                 Ok(n) => {
                     let data = String::from_utf8_lossy(&buf[..n]).to_string();
                     let _ = app_clone.emit(
@@ -76,7 +113,21 @@ pub fn spawn(
         if let Ok(mut map) = store_clone.lock() {
             let mut exit_code: Option<u32> = None;
             if let Some(mut session) = map.remove(&tid) {
-                exit_code = session.child.wait().ok().map(|s| s.exit_code());
+                match session.child.wait() {
+                    Ok(status) => {
+                        exit_code = Some(status.exit_code());
+                    }
+                    Err(err) => {
+                        emit_task_log(
+                            &app_clone,
+                            Some(&tid),
+                            "error",
+                            "backend",
+                            "pty.wait",
+                            err.to_string(),
+                        );
+                    }
+                }
             }
 
             let _ = app_clone.emit(

@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { listen } from '@tauri-apps/api/event'
 import { useEffect } from 'react'
+import { SYSTEM_TASK_ID, TaskLogEvent } from '../types'
 
 interface TerminalEntry {
   terminal: Terminal
@@ -12,6 +13,16 @@ interface TerminalEntry {
 }
 
 const terminalMap = new Map<string, TerminalEntry>()
+
+function normalizeLine(data: string): string {
+  return data.replace(/\r?\n/g, '\r\n')
+}
+
+function formatTaskLog(log: TaskLogEvent): string {
+  const ts = log.ts || new Date().toISOString()
+  const scope = log.phase?.trim() || 'unknown'
+  return `[${ts}] [${log.source}] [${log.level}] [${scope}] ${normalizeLine(log.message)}\r\n`
+}
 
 export function getOrCreateTerminal(taskId: string): TerminalEntry {
   if (!terminalMap.has(taskId)) {
@@ -61,12 +72,30 @@ export function destroyTerminal(taskId: string) {
   }
 }
 
+export function writeToTerminal(taskId: string, data: string) {
+  const entry = getOrCreateTerminal(taskId)
+  entry.terminal.write(data)
+}
+
 export function usePtyEvents() {
   useEffect(() => {
     const unlisten = listen<{ taskId: string; data: string }>('pty_output', (event) => {
       const { taskId, data } = event.payload
-      const entry = terminalMap.get(taskId)
-      entry?.terminal.write(data)
+      writeToTerminal(taskId, data)
+    })
+
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [])
+}
+
+export function useTaskLogEvents() {
+  useEffect(() => {
+    const unlisten = listen<TaskLogEvent>('task_log', (event) => {
+      const payload = event.payload
+      const taskId = payload.taskId?.trim() ? payload.taskId : SYSTEM_TASK_ID
+      writeToTerminal(taskId, formatTaskLog(payload))
     })
 
     return () => {

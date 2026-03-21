@@ -1,4 +1,4 @@
-import { Task } from '../types'
+import { SYSTEM_TASK_ID, Task } from '../types'
 
 interface Props {
   tasks: Task[]
@@ -18,37 +18,54 @@ function statusColor(status: Task['status']) {
 }
 
 export function TaskTabBar({ tasks, activeTaskId, onSelect, onClose }: Props) {
-  if (tasks.length === 0) {
-    return null
-  }
+  const tabs: Array<{
+    id: string
+    title: string
+    status: Task['status']
+    closable: boolean
+  }> = [
+    {
+      id: SYSTEM_TASK_ID,
+      title: 'SYSTEM',
+      status: 'done',
+      closable: false,
+    },
+    ...tasks.map((task) => ({
+      id: task.id,
+      title: `${task.pluginName} - ${task.configName}`,
+      status: task.status,
+      closable: true,
+    })),
+  ]
 
   return (
     <div className="task-tab-bar">
-      {tasks.map((task) => {
-        const isActive = task.id === activeTaskId
-        const title = `${task.pluginName} - ${task.configName}`
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTaskId
 
         return (
           <div
-            key={task.id}
-            onClick={() => onSelect(task.id)}
+            key={tab.id}
+            onClick={() => onSelect(tab.id)}
             className={`task-tab ${isActive ? 'task-tab-active' : ''}`}
             style={{ minWidth: '120px', maxWidth: '240px' }}
           >
-            <span className={`task-dot ${statusColor(task.status)}`} />
-            <span className="task-label" title={title}>
-              {title}
+            <span className={`task-dot ${statusColor(tab.status)}`} />
+            <span className="task-label" title={tab.title}>
+              {tab.title}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onClose(task.id)
-              }}
-              className="task-close"
-            >
-              ×
-            </button>
+            {tab.closable ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClose(tab.id)
+                }}
+                className="task-close"
+              >
+                ×
+              </button>
+            ) : null}
           </div>
         )
       })}
