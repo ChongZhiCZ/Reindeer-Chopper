@@ -5,8 +5,8 @@
   "description": "The built-in sample plugin for Reindeer Chopper. It greets the user and demonstrates filepath params.",
   "runtime": {
     "windows": {
-      "run": "node index.js",
-      "install": "npm install"
+      "run": "node.cmd index.js",
+      "install": "npm.cmd install"
     },
     "mac": {
       "run": "node index.js",

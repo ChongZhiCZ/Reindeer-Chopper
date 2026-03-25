@@ -5,7 +5,7 @@
   "description": "Open a website and save a screenshot to the selected folder",
   "runtime": {
     "windows": {
-      "run": "node index.js",
+      "run": "node.cmd index.js",
       "install": "cmd /C \"npm install && npx playwright install chromium\""
     },
     "mac": {
