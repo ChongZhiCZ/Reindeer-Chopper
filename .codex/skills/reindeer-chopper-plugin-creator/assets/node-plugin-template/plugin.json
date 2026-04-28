@@ -36,6 +36,13 @@
       "description": "Choose greeting mode or intro mode."
     },
     {
+      "name": "note",
+      "label": "Extra Note",
+      "type": "textarea",
+      "default": "Optional multi-line note.",
+      "description": "Optional multi-line text passed as one CLI value."
+    },
+    {
       "name": "loud",
       "label": "Loud Mode",
       "type": "boolean",

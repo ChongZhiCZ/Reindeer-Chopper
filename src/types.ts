@@ -1,4 +1,4 @@
-export type ParameterType = 'text' | 'number' | 'boolean' | 'select' | 'filepath'
+export type ParameterType = 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'filepath'
 
 export interface PlatformRuntimeDescriptor {
   run: string

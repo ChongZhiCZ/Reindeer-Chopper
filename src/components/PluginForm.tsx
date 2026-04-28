@@ -3,6 +3,7 @@ import { BooleanField } from './fields/BooleanField'
 import { FilePathField } from './fields/FilePathField'
 import { NumberField } from './fields/NumberField'
 import { SelectField } from './fields/SelectField'
+import { TextareaField } from './fields/TextareaField'
 import { TextField } from './fields/TextField'
 
 interface Props {
@@ -46,6 +47,9 @@ export function PluginForm({ plugin, values, onChange }: Props) {
 
         if (p.type === 'text') {
           return <TextField {...common} value={val as string} onChange={(v) => onChange(p.name, v)} />
+        }
+        if (p.type === 'textarea') {
+          return <TextareaField {...common} value={val as string} onChange={(v) => onChange(p.name, v)} />
         }
         if (p.type === 'number') {
           return <NumberField {...common} value={val as number} onChange={(v) => onChange(p.name, v)} />

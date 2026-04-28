@@ -20,7 +20,7 @@ Optional top-level fields:
 Each parameter object:
 - `name`: string, unique inside the plugin
 - `label`: string, UI label
-- `type`: one of `text`, `number`, `boolean`, `select`, `filepath`
+- `type`: one of `text`, `textarea`, `number`, `boolean`, `select`, `filepath`
 - `required`: optional boolean
 - `description`: optional string
 - `default`: optional (`string | number | boolean`)
@@ -28,7 +28,7 @@ Each parameter object:
 - `pathMode`: required when `type` is `filepath`, must be `file` or `directory`
 
 Type-specific default expectations:
-- `text` / `filepath` / `select`: `default` should be string
+- `text` / `textarea` / `filepath` / `select`: `default` should be string
 - `number`: `default` should be number
 - `boolean`: `default` should be boolean
 - `select`: `default` should be one of `options`

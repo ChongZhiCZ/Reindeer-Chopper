@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-ALLOWED_TYPES = {"text", "number", "boolean", "select", "filepath"}
+ALLOWED_TYPES = {"text", "textarea", "number", "boolean", "select", "filepath"}
 ALLOWED_PATH_MODES = {"file", "directory"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -80,7 +80,7 @@ def validate_parameter(param: object, index: int, seen: set[str], errors: list[s
     if default is None:
         return
 
-    if ptype in {"text", "filepath", "select"} and not isinstance(default, str):
+    if ptype in {"text", "textarea", "filepath", "select"} and not isinstance(default, str):
         errors.append(f"{ctx}.default must be string for type '{ptype}'")
     if ptype == "number" and not is_number(default):
         errors.append(f"{ctx}.default must be number for type 'number'")

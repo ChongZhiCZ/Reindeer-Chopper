@@ -10,6 +10,7 @@ const name = get('--name') || 'World'
 const parsedCount = parseInt(get('--count') || '3', 10)
 const count = Number.isFinite(parsedCount) ? Math.max(parsedCount, 1) : 3
 const mode = get('--mode') || '问候'
+const note = get('--note') || ''
 const loud = has('--loud')
 const inputFile = get('--inputFile')
 const outputDir = get('--outputDir')
@@ -85,7 +86,7 @@ async function main() {
   if (mode === '自述') {
     const lines = [
       `I am the built-in Hello World plugin for Reindeer Chopper.`,
-      `I demonstrate text/number/boolean/filepath/select parameter wiring.`,
+      `I demonstrate text/textarea/number/boolean/filepath/select parameter wiring.`,
       `Current input name: ${name}`,
     ]
     for (const line of lines) {
@@ -98,6 +99,16 @@ async function main() {
       console.log(loud ? msg.toUpperCase() : msg)
       await sleep(120)
     }
+  }
+
+  if (note.trim()) {
+    console.log(color('36', 'Extra note:'))
+    for (const line of note.split(/\r?\n/)) {
+      console.log(loud ? line.toUpperCase() : line)
+      await sleep(80)
+    }
+  } else {
+    console.log(color('33', 'No extra note provided. You can set --note to demo textarea.'))
   }
 
   printPathDemo()

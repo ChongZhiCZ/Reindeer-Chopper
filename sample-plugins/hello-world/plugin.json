@@ -2,7 +2,7 @@
   "id": "hello-world",
   "name": "Hello World",
   "version": "1.0.0",
-  "description": "The built-in sample plugin for Reindeer Chopper. It greets the user and demonstrates filepath params.",
+  "description": "The built-in sample plugin for Reindeer Chopper. It greets the user and demonstrates common parameter types.",
   "runtime": {
     "windows": {
       "run": "node.cmd index.js",
@@ -35,6 +35,13 @@
       "default": "问候",
       "options": ["问候", "自述"],
       "description": "Choose between repeated greeting and self-introduction output."
+    },
+    {
+      "name": "note",
+      "label": "Extra Note",
+      "type": "textarea",
+      "default": "This is a three-line textarea example.",
+      "description": "Optional multi-line text passed as one CLI value."
     },
     {
       "name": "loud",

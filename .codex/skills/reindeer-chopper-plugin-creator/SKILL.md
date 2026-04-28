@@ -35,6 +35,7 @@ python3 .codex/skills/reindeer-chopper-plugin-creator/scripts/scaffold_plugin.py
 ### 3) Author descriptor with current parameter contract
 Supported `parameters[*].type`:
 - `text`
+- `textarea`
 - `number`
 - `boolean`
 - `select` (use non-empty `options`, keep `default` inside options)
@@ -47,7 +48,7 @@ Rules:
 
 ### 4) Implement runtime command behavior
 Write `index.js` to consume flags in this shape:
-- `--param value` for text/number/select/filepath
+- `--param value` for text/textarea/number/select/filepath
 - `--flag` for boolean `true`
 
 Runtime command strings are argv-parsed, not shell-expanded. For compound commands (`&&`, env exports, shell built-ins), wrap explicitly per platform:

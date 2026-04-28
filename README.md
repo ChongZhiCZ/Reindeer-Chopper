@@ -1,45 +1,159 @@
-# Tauri + React + Typescript
+# Reindeer Chopper
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Reindeer Chopper is a desktop app for running small local tools through a friendly form and a live terminal. Pick a plugin, fill in its parameters, save reusable configs, and run it without memorizing command-line flags.
 
-## Recommended IDE Setup
+## What You Can Do
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- Import local plugin folders.
+- Fill plugin forms generated from `plugin.json`.
+- Save, select, update, and delete parameter configs.
+- Run multiple plugin tasks in terminal tabs.
+- Watch install and runtime logs inside the app.
 
-## Distribution Builds
+## Getting The App
 
-- macOS package (`.dmg`):
-  - `npm run dist:mac`
-- Windows packages (`.exe` + `.msi`):
-  - `npm run dist:win` (run on Windows host)
+Download the package for your platform from the project release page when available:
 
-Build outputs are under `src-tauri/target/release/bundle/`.
+- macOS: `.dmg`
+- Windows: `.exe` or `.msi`
 
-CI workflow:
-- `.github/workflows/desktop-distribution.yml`
-- Trigger manually with `workflow_dispatch` or push a `v*` tag to build both macOS and Windows artifacts.
+After installation, launch `reindeer-chopper` like a normal desktop app.
 
-### macOS Release signing
+## First Run
 
-GitHub Release `.dmg` files must be signed and notarized. Local builds can run without this, but a downloaded `.dmg` gets a macOS quarantine flag and Gatekeeper may report the app as damaged if the Release asset is unsigned or not notarized.
+1. Open Reindeer Chopper.
+2. Click the import action in the plugin sidebar.
+3. Select a plugin folder that contains a `plugin.json`.
+4. Choose the imported plugin from the sidebar.
+5. Fill in the form.
+6. Save the config if you want to reuse it.
+7. Click run and watch the terminal tab.
 
-For `v*` tag builds, configure these GitHub Actions secrets before publishing:
+The repository includes sample plugins under `sample-plugins/`:
 
-- `APPLE_CERTIFICATE`: base64 encoded Developer ID Application `.p12`.
-- `APPLE_CERTIFICATE_PASSWORD`: password used when exporting the `.p12`.
-- `APPLE_ID`: Apple Developer account email.
-- `APPLE_PASSWORD`: app-specific password for notarization.
-- `APPLE_TEAM_ID`: Apple Developer Team ID.
-- `KEYCHAIN_PASSWORD`: random password for the temporary CI keychain.
+- `hello-world`: demonstrates text, textarea, number, select, boolean, and file path parameters.
+- `playwright-screenshot`: opens a URL and saves a screenshot to a selected folder.
 
-Example certificate secret generation on macOS:
+## Plugin Folders
 
-```sh
-base64 -i ./DeveloperIDApplication.p12 | tr -d '\n' | pbcopy
+A plugin is a folder with a descriptor file named `plugin.json`. Node.js plugins commonly also include `index.js` and `package.json`.
+
+Minimal shape:
+
+```json
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "Greet someone from a local script",
+  "runtime": {
+    "windows": {
+      "run": "node.cmd index.js",
+      "install": "npm.cmd install"
+    },
+    "mac": {
+      "run": "node index.js",
+      "install": "npm install"
+    }
+  },
+  "parameters": [
+    {
+      "name": "name",
+      "label": "Your Name",
+      "type": "text",
+      "required": true,
+      "default": "World"
+    }
+  ]
+}
 ```
 
-Manual `workflow_dispatch` builds remain useful for unsigned test packages. If you need to inspect an old unsigned local install on your own machine, this can remove the quarantine flag, but it is not a replacement for signing Release assets:
+`runtime.<platform>.install` is optional. If present, Reindeer Chopper runs it before the first plugin run on that platform.
+
+## Form Parameters
+
+Each item in `parameters` becomes one field in the app. The field `name` is also the command-line flag passed to the plugin script.
+
+| Type | UI | Runtime value |
+| --- | --- | --- |
+| `text` | Single-line text input | `--name value` |
+| `textarea` | Fixed 3-line text area | `--name value` |
+| `number` | Numeric stepper input | `--name value` |
+| `boolean` | Checkbox | `--name` when true, omitted when false |
+| `select` | Dropdown | `--name selectedValue` |
+| `filepath` | Text input with picker | `--name /selected/path` |
+
+Useful parameter fields:
+
+- `name`: unique flag name, such as `url` or `outputDir`.
+- `label`: user-facing field label.
+- `type`: one of the supported parameter types.
+- `required`: prevents running while the value is empty.
+- `default`: initial value.
+- `description`: short helper text under the field.
+- `options`: required for `select`.
+- `pathMode`: required for `filepath`; use `"file"` or `"directory"`.
+
+Example textarea parameter:
+
+```json
+{
+  "name": "note",
+  "label": "Extra Note",
+  "type": "textarea",
+  "default": "Write a short note here.",
+  "description": "Multi-line text passed to the script as one value."
+}
+```
+
+## How Scripts Receive Values
+
+Reindeer Chopper launches the platform-specific `run` command and appends parameter flags in descriptor order.
+
+For this config:
+
+```json
+{
+  "name": "Ada",
+  "note": "Line one\nLine two",
+  "loud": true
+}
+```
+
+The script receives arguments like:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/reindeer-chopper.app
+node index.js --name Ada --note "Line one
+Line two" --loud
 ```
+
+The command is parsed as arguments, not as a shell string. If your run or install command needs shell features such as `&&`, wrap it explicitly:
+
+- Windows: `cmd /C "npm install && node index.js"`
+- macOS: `sh -lc 'npm install && node index.js'`
+
+## Troubleshooting
+
+- Plugin does not appear: make sure the selected folder contains a valid `plugin.json`.
+- File picker parameter fails to import: `filepath` parameters must include `pathMode`.
+- Run button is disabled: fill every required field.
+- Dependency install fails: inspect the system terminal tab for the install command output.
+- macOS says the app is damaged after downloading: the current release package is unsigned; remove the quarantine flag for local testing or build from source.
+
+## Building From Source
+
+Most users do not need this. For local development:
+
+```sh
+npm install
+npm run tauri dev
+```
+
+Build packages:
+
+```sh
+npm run dist:mac
+npm run dist:win
+```
+
+Build outputs are written under `src-tauri/target/release/bundle/`.

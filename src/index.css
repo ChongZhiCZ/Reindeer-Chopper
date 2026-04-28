@@ -414,6 +414,19 @@ button {
   padding: 9px;
 }
 
+.field-textarea {
+  height: calc(1.2em * 3 + 20px + 2px);
+  min-height: calc(1.2em * 3 + 20px + 2px);
+  max-height: calc(1.2em * 3 + 20px + 2px);
+  resize: none;
+}
+
+.field-textarea:focus {
+  height: calc(1.2em * 3 + 18px + 4px);
+  min-height: calc(1.2em * 3 + 18px + 4px);
+  max-height: calc(1.2em * 3 + 18px + 4px);
+}
+
 .field-input-number {
   max-width: 120px;
   min-width: 0;
