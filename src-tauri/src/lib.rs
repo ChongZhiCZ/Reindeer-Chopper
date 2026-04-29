@@ -40,53 +40,12 @@ fn map_and_log_err<T>(
     })
 }
 
-fn split_command_line(command: &str) -> Result<Vec<String>, String> {
-    let mut argv = Vec::new();
-    let mut current = String::new();
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    let mut escaped = false;
-
-    for ch in command.chars() {
-        if escaped {
-            current.push(ch);
-            escaped = false;
-            continue;
-        }
-
-        match ch {
-            '\\' if !in_single_quote => {
-                escaped = true;
-            }
-            '\'' if !in_double_quote => {
-                in_single_quote = !in_single_quote;
-            }
-            '"' if !in_single_quote => {
-                in_double_quote = !in_double_quote;
-            }
-            _ if ch.is_whitespace() && !in_single_quote && !in_double_quote => {
-                if !current.is_empty() {
-                    argv.push(std::mem::take(&mut current));
-                }
-            }
-            _ => current.push(ch),
-        }
+fn command_to_argv(command: &plugin_scanner::RuntimeCommand) -> Result<Vec<String>, String> {
+    if command.is_empty() || command[0].trim().is_empty() {
+        Err("Invalid command: argv is empty".to_string())
+    } else {
+        Ok(command.clone())
     }
-
-    if escaped {
-        return Err("Invalid command: trailing escape character".to_string());
-    }
-    if in_single_quote || in_double_quote {
-        return Err("Invalid command: unmatched quote".to_string());
-    }
-    if !current.is_empty() {
-        argv.push(current);
-    }
-    if argv.is_empty() {
-        return Err("Invalid command: command is empty".to_string());
-    }
-
-    Ok(argv)
 }
 
 fn append_param_args(
@@ -196,11 +155,7 @@ async fn run_plugin(
         })?;
 
     let runtime = current_platform_runtime(&descriptor);
-    let install_command = runtime
-        .install
-        .as_deref()
-        .map(str::trim)
-        .filter(|cmd| !cmd.is_empty());
+    let install_command = runtime.install.as_ref().filter(|cmd| !cmd.is_empty());
 
     let configs_dir = app_data_dir(&app).join("configs");
     let deps_installed = config_manager::is_deps_installed(&configs_dir, &plugin_id);
@@ -209,8 +164,12 @@ async fn run_plugin(
         let Some(install_command) = install_command else {
             // No install command configured for this platform.
             // Treat this plugin as installation-free.
-            let mut argv =
-                map_and_log_err(&app, "run_plugin.split_run_command", split_command_line(runtime.run.trim()), None)?;
+            let mut argv = map_and_log_err(
+                &app,
+                "run_plugin.prepare_run_command",
+                command_to_argv(&runtime.run),
+                None,
+            )?;
             append_param_args(&mut argv, &descriptor, &params);
 
             let task_id = map_and_log_err(
@@ -232,8 +191,8 @@ async fn run_plugin(
 
         let install_argv = map_and_log_err(
             &app,
-            "run_plugin.split_install_command",
-            split_command_line(install_command),
+            "run_plugin.prepare_install_command",
+            command_to_argv(install_command),
             None,
         )?;
         let task_id = map_and_log_err(
@@ -267,8 +226,8 @@ async fn run_plugin(
 
     let mut argv = map_and_log_err(
         &app,
-        "run_plugin.split_run_command",
-        split_command_line(runtime.run.trim()),
+        "run_plugin.prepare_run_command",
+        command_to_argv(&runtime.run),
         None,
     )?;
     append_param_args(&mut argv, &descriptor, &params);
