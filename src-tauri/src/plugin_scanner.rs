@@ -16,10 +16,12 @@ pub struct ParameterDescriptor {
     pub options: Option<Vec<String>>,
 }
 
+pub type RuntimeCommand = Vec<String>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlatformRuntimeDescriptor {
-    pub run: String,
-    pub install: Option<String>,
+    pub run: RuntimeCommand,
+    pub install: Option<RuntimeCommand>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,11 +43,19 @@ pub struct PluginDescriptor {
 }
 
 pub fn validate_plugin_descriptor(descriptor: &PluginDescriptor) -> Result<(), String> {
-    if descriptor.runtime.windows.run.trim().is_empty() {
+    if descriptor.runtime.windows.run.is_empty() || descriptor.runtime.windows.run[0].trim().is_empty() {
         return Err("runtime.windows.run must not be empty".to_string());
     }
-    if descriptor.runtime.mac.run.trim().is_empty() {
+    if descriptor.runtime.mac.run.is_empty() || descriptor.runtime.mac.run[0].trim().is_empty() {
         return Err("runtime.mac.run must not be empty".to_string());
+    }
+
+    if descriptor.runtime.windows.install.as_ref().is_some_and(|argv| argv.is_empty() || argv[0].trim().is_empty()) {
+        return Err("runtime.windows.install must not be empty when provided".to_string());
+    }
+
+    if descriptor.runtime.mac.install.as_ref().is_some_and(|argv| argv.is_empty() || argv[0].trim().is_empty()) {
+        return Err("runtime.mac.install must not be empty when provided".to_string());
     }
 
     for param in &descriptor.parameters {
@@ -132,8 +142,8 @@ mod tests {
             "name": "My Plugin",
             "version": "1.0.0",
             "runtime": {
-                "windows": {"run": "node index.js"},
-                "mac": {"run": "node index.js"}
+                "windows": {"run": ["node", "index.js"]},
+                "mac": {"run": ["node", "index.js"]}
             },
             "parameters": [
                 {"name": "foo", "label": "Foo", "type": "text"}
@@ -146,6 +156,7 @@ mod tests {
         assert_eq!(plugins[0].parameters.len(), 1);
     }
 
+    #[test]
     #[test]
     fn scan_skips_dir_without_plugin_json() {
         let dir = TempDir::new().unwrap();
@@ -173,8 +184,8 @@ mod tests {
             "name": "Bad Filepath Plugin",
             "version": "1.0.0",
             "runtime": {
-                "windows": {"run": "node index.js"},
-                "mac": {"run": "node index.js"}
+                "windows": {"run": ["node", "index.js"]},
+                "mac": {"run": ["node", "index.js"]}
             },
             "parameters": [
                 {"name": "input", "label": "Input", "type": "filepath"}
