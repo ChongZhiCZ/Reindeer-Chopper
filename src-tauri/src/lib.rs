@@ -14,16 +14,6 @@ fn app_data_dir(app: &AppHandle) -> PathBuf {
     app.path().app_data_dir().expect("app data dir")
 }
 
-fn current_platform_runtime(
-    descriptor: &plugin_scanner::PluginDescriptor,
-) -> &plugin_scanner::PlatformRuntimeDescriptor {
-    if cfg!(target_os = "windows") {
-        &descriptor.runtime.windows
-    } else {
-        &descriptor.runtime.mac
-    }
-}
-
 fn log_backend_error(app: &AppHandle, phase: &str, message: &str, task_id: Option<&str>) {
     pty_manager::emit_task_log(app, task_id, "error", "backend", phase, message.to_string());
 }
@@ -40,11 +30,44 @@ fn map_and_log_err<T>(
     })
 }
 
-fn command_to_argv(command: &plugin_scanner::RuntimeCommand) -> Result<Vec<String>, String> {
+fn validate_command(command: &plugin_scanner::RuntimeCommand) -> Result<(), String> {
     if command.is_empty() || command[0].trim().is_empty() {
         Err("Invalid command: argv is empty".to_string())
     } else {
-        Ok(command.clone())
+        Ok(())
+    }
+}
+
+fn shell_quote_arg(arg: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if arg.contains(' ') || arg.contains('&') || arg.contains('|') || arg.contains('^') || arg.contains('"') {
+            format!("\"{}\"" , arg.replace('"', "\\\""))
+        } else {
+            arg.to_string()
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if arg.contains(|c: char| c.is_whitespace() || "\"'\\|&;<>()$`!".contains(c)) {
+            format!("'{}'" , arg.replace('\'', "'\\''"))
+        } else {
+            arg.to_string()
+        }
+    }
+}
+
+fn wrap_in_login_shell(argv: Vec<String>) -> Vec<String> {
+    let command = argv.iter().map(|a| shell_quote_arg(a)).collect::<Vec<_>>().join(" ");
+    #[cfg(target_os = "windows")]
+    {
+        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        vec![comspec, "/c".to_string(), command]
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        vec![shell, "-lc".to_string(), command]
     }
 }
 
@@ -154,7 +177,7 @@ async fn run_plugin(
             err
         })?;
 
-    let runtime = current_platform_runtime(&descriptor);
+    let runtime = &descriptor.runtime;
     let install_command = runtime.install.as_ref().filter(|cmd| !cmd.is_empty());
 
     let configs_dir = app_data_dir(&app).join("configs");
@@ -164,13 +187,10 @@ async fn run_plugin(
         let Some(install_command) = install_command else {
             // No install command configured for this platform.
             // Treat this plugin as installation-free.
-            let mut argv = map_and_log_err(
-                &app,
-                "run_plugin.prepare_run_command",
-                command_to_argv(&runtime.run),
-                None,
-            )?;
+            map_and_log_err(&app, "run_plugin.validate_run_command", validate_command(&runtime.run), None)?;
+            let mut argv = runtime.run.clone();
             append_param_args(&mut argv, &descriptor, &params);
+            let shell_argv = wrap_in_login_shell(argv);
 
             let task_id = map_and_log_err(
                 &app,
@@ -179,7 +199,7 @@ async fn run_plugin(
                     store.inner().clone(),
                     app.clone(),
                     plugin_dir.to_string_lossy().to_string(),
-                    argv,
+                    shell_argv,
                     Some(plugin_id),
                     None,
                 ),
@@ -189,12 +209,8 @@ async fn run_plugin(
             return Ok(task_id);
         };
 
-        let install_argv = map_and_log_err(
-            &app,
-            "run_plugin.prepare_install_command",
-            command_to_argv(install_command),
-            None,
-        )?;
+        map_and_log_err(&app, "run_plugin.validate_install_command", validate_command(install_command), None)?;
+        let install_argv = wrap_in_login_shell(install_command.clone());
         let task_id = map_and_log_err(
             &app,
             "run_plugin.spawn_install_task",
@@ -224,13 +240,10 @@ async fn run_plugin(
         return Ok(task_id);
     }
 
-    let mut argv = map_and_log_err(
-        &app,
-        "run_plugin.prepare_run_command",
-        command_to_argv(&runtime.run),
-        None,
-    )?;
+    map_and_log_err(&app, "run_plugin.validate_run_command", validate_command(&runtime.run), None)?;
+    let mut argv = runtime.run.clone();
     append_param_args(&mut argv, &descriptor, &params);
+    let shell_argv = wrap_in_login_shell(argv);
 
     let task_id = map_and_log_err(
         &app,
@@ -239,7 +252,7 @@ async fn run_plugin(
             store.inner().clone(),
             app.clone(),
             plugin_dir.to_string_lossy().to_string(),
-            argv,
+            shell_argv,
             Some(plugin_id),
             None,
         ),
