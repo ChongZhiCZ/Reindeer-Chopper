@@ -1,8 +1,10 @@
 export type ParameterType = 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'filepath'
 
+export type RuntimeCommand = string[]
+
 export interface PlatformRuntimeDescriptor {
-  run: string
-  install?: string
+  run: RuntimeCommand
+  install?: RuntimeCommand
 }
 
 export interface RuntimeDescriptor {
