@@ -39,33 +39,24 @@ fn validate_command(command: &plugin_scanner::RuntimeCommand) -> Result<(), Stri
 }
 
 fn shell_quote_arg(arg: &str) -> String {
-    #[cfg(target_os = "windows")]
-    {
-        if arg.contains(' ') || arg.contains('&') || arg.contains('|') || arg.contains('^') || arg.contains('"') {
-            format!("\"{}\"" , arg.replace('"', "\\\""))
-        } else {
-            arg.to_string()
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        if arg.contains(|c: char| c.is_whitespace() || "\"'\\|&;<>()$`!".contains(c)) {
-            format!("'{}'" , arg.replace('\'', "'\\''"))
-        } else {
-            arg.to_string()
-        }
+    if arg.contains(|c: char| c.is_whitespace() || c == '\'' || c == '"') {
+        format!("'{}'", arg.replace('\'', "'\\''"))
+    } else {
+        arg.to_string()
     }
 }
 
 fn wrap_in_login_shell(argv: Vec<String>) -> Vec<String> {
-    let command = argv.iter().map(|a| shell_quote_arg(a)).collect::<Vec<_>>().join(" ");
     #[cfg(target_os = "windows")]
     {
         let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-        vec![comspec, "/c".to_string(), command]
+        let mut result = vec![comspec, "/c".to_string()];
+        result.extend(argv);
+        result
     }
     #[cfg(not(target_os = "windows"))]
     {
+        let command = argv.iter().map(|a| shell_quote_arg(a)).collect::<Vec<_>>().join(" ");
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
         vec![shell, "-lc".to_string(), command]
     }
