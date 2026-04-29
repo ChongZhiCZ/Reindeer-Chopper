@@ -2,14 +2,9 @@ export type ParameterType = 'text' | 'textarea' | 'number' | 'boolean' | 'select
 
 export type RuntimeCommand = string[]
 
-export interface PlatformRuntimeDescriptor {
+export interface RuntimeDescriptor {
   run: RuntimeCommand
   install?: RuntimeCommand
-}
-
-export interface RuntimeDescriptor {
-  windows: PlatformRuntimeDescriptor
-  mac: PlatformRuntimeDescriptor
 }
 
 interface BaseParameterDescriptor {
